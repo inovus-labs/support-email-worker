@@ -12,7 +12,7 @@ export const contactPayloadSchema = z.object({
   fromEmail: z.string().email().max(254),
   subject: z.string().min(1).max(200),
   message: z.string().min(1).max(8000),
-  turnstileToken: z.string().min(1),
+  turnstileToken: z.string().min(1).optional(),
 });
 
 const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
@@ -82,10 +82,15 @@ export async function handleContact(request: Request, env: Env): Promise<Respons
   }
   const payload = parsed.data;
 
-  const remoteIp = request.headers.get("CF-Connecting-IP");
-  const turnstileOk = await verifyTurnstile(env, payload.turnstileToken, remoteIp);
-  if (!turnstileOk) {
-    return jsonResponse({ error: "turnstile verification failed" }, { status: 403 }, origin);
+  if (env.TURNSTILE_ENABLED === "true") {
+    if (!payload.turnstileToken) {
+      return jsonResponse({ error: "turnstile token required" }, { status: 400 }, origin);
+    }
+    const remoteIp = request.headers.get("CF-Connecting-IP");
+    const turnstileOk = await verifyTurnstile(env, payload.turnstileToken, remoteIp);
+    if (!turnstileOk) {
+      return jsonResponse({ error: "turnstile verification failed" }, { status: 403 }, origin);
+    }
   }
 
   const ticketRef = nanoid(10);

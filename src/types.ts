@@ -40,6 +40,7 @@ export interface Env {
   SEND: SendEmail;
   SupportAgent: DurableObjectNamespace;
   TURNSTILE_SECRET: string;
+  TURNSTILE_ENABLED: string;
   SUPPORT_DOMAIN: string;
   SUPPORT_LOCAL_PART: string;
   NOREPLY_FROM: string;

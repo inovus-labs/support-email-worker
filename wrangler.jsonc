@@ -43,6 +43,7 @@
     "SUPPORT_DOMAIN": "inovuslabs.org",
     "SUPPORT_LOCAL_PART": "support",
     "NOREPLY_FROM": "noreply@inovuslabs.org",
-    "TEAM_BCC": "inovuslabs@kjcmt.ac.in"
+    "TEAM_BCC": "inovuslabs@kjcmt.ac.in",
+    "TURNSTILE_ENABLED": "false"
   }
 }
