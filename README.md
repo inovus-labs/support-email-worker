@@ -71,7 +71,7 @@ wrangler email send \
 1. Add `inovuslabs.org` to Cloudflare DNS.
 2. **Email → Email Routing → Enable** on `inovuslabs.org`. Cloudflare will add the required MX + SPF records.
 3. **Destination addresses → Add** `inovuslabs@kjcmt.ac.in` and confirm via the verification email. (Required so `env.SEND.send()` is allowed to deliver to it.)
-4. **Routing rules → Catch-all → Send to Worker → `inovus-email-worker`**. This is what makes `support+anything@inovuslabs.org` reach the Worker.
+4. **Routing rules → Catch-all → Send to Worker → `support-email-worker`**. This is what makes `support+anything@inovuslabs.org` reach the Worker.
 5. Create a Turnstile site for the project form domains; copy the **secret** key:
    ```sh
    wrangler secret put TURNSTILE_SECRET
@@ -83,7 +83,7 @@ wrangler email send \
 Each project site sends:
 
 ```http
-POST https://inovus-email-worker.<subdomain>.workers.dev/contact
+POST https://support-email-worker.<subdomain>.workers.dev/contact
 Content-Type: application/json
 
 {
