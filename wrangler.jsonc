@@ -40,8 +40,8 @@
     }
   ],
   "vars": {
-    "SUPPORT_DOMAIN": "inovuslabs.org",
-    "SUPPORT_LOCAL_PART": "support",
+    "SUPPORT_DOMAIN": "kjcmt.ac.in",
+    "SUPPORT_LOCAL_PART": "inovuslabs",
     "NOREPLY_FROM": "noreply@inovuslabs.org",
     "TEAM_BCC": "inovuslabs@kjcmt.ac.in",
     "TURNSTILE_ENABLED": "false"
