@@ -129,7 +129,8 @@ export function buildContactEmail(args: ContactEmailArgs) {
   msg.setSender({ name: `${args.senderName} (via contact form)`, addr: args.fromAddress });
   msg.setRecipient(args.toAddress);
   msg.setSubject(`[${args.projectSlug}] ${args.subject}`);
-  msg.setHeader("Reply-To", `${args.senderName} <${args.senderEmail}>`);
+  msg.setHeader("Reply-To", args.senderEmail);
+  msg.setHeader("X-Inovus-Sender-Name", args.senderName);
   msg.setHeader("X-Inovus-Source", "contact-form");
   msg.setHeader("X-Inovus-Project", args.projectSlug);
   msg.addMessage({ contentType: "text/plain", data: body });
