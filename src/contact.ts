@@ -94,7 +94,7 @@ export async function handleContact(request: Request, env: Env): Promise<Respons
   }
 
   const ticketRef = nanoid(10);
-  const toAddress = `${env.SUPPORT_LOCAL_PART}+${payload.projectSlug}@${env.SUPPORT_DOMAIN}`;
+  const toAddress = `${env.SUPPORT_LOCAL_PART}@${env.SUPPORT_DOMAIN}`;
 
   const mime = buildContactEmail({
     projectSlug: payload.projectSlug,
