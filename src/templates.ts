@@ -1,4 +1,4 @@
-import { createMimeMessage } from "mimetext";
+import { createMimeMessage, Mailbox } from "mimetext";
 import type { Classification, Intent } from "./types";
 
 const INTENT_BLURB: Record<Intent, string> = {
@@ -94,7 +94,7 @@ export function buildTeamSummary(args: TeamSummaryArgs) {
   msg.setSubject(
     `[Inovus Support][${args.projectSlug}] ${args.ticketRef} ${args.classification.intent}: ${args.subject}`,
   );
-  msg.setHeader("Reply-To", args.sender.address);
+  msg.setHeader("Reply-To", new Mailbox({ addr: args.sender.address, name: args.sender.name ?? "" }));
   msg.setHeader("X-Inovus-Ticket", args.ticketRef);
   msg.addMessage({ contentType: "text/plain", data: body });
 
@@ -129,7 +129,7 @@ export function buildContactEmail(args: ContactEmailArgs) {
   msg.setSender({ name: `${args.senderName} (via contact form)`, addr: args.fromAddress });
   msg.setRecipient(args.toAddress);
   msg.setSubject(`[${args.projectSlug}] ${args.subject}`);
-  msg.setHeader("Reply-To", args.senderEmail);
+  msg.setHeader("Reply-To", new Mailbox({ addr: args.senderEmail, name: args.senderName }));
   msg.setHeader("X-Inovus-Sender-Name", args.senderName);
   msg.setHeader("X-Inovus-Source", "contact-form");
   msg.setHeader("X-Inovus-Project", args.projectSlug);
