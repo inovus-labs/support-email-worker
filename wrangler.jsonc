@@ -1,0 +1,42 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "inovus-email-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "ai": {
+    "binding": "AI"
+  },
+  "send_email": [
+    {
+      "name": "SEND",
+      "allowed_destination_addresses": [
+        "inovuslabs@kjcmt.ac.in",
+        "support@inovuslabs.org"
+      ]
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SupportAgent",
+        "class_name": "SupportAgent"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["SupportAgent"]
+    }
+  ],
+  "vars": {
+    "SUPPORT_DOMAIN": "inovuslabs.org",
+    "SUPPORT_LOCAL_PART": "support",
+    "NOREPLY_FROM": "noreply@inovuslabs.org",
+    "TEAM_BCC": "inovuslabs@kjcmt.ac.in"
+  }
+}
