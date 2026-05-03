@@ -1,8 +1,9 @@
 import { EmailMessage } from "cloudflare:email";
-import { nanoid } from "nanoid";
+import { getAgentByName } from "agents";
 import { z } from "zod";
 import { buildContactEmail } from "./templates";
 import type { Env } from "./types";
+import type { SupportAgent } from "./agent";
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/;
 
@@ -55,6 +56,16 @@ function jsonResponse(body: unknown, init: ResponseInit, origin: string | null):
   });
 }
 
+function utf8ToBase64(input: string): string {
+  const bytes = new TextEncoder().encode(input);
+  let binary = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
 export async function handleContact(request: Request, env: Env): Promise<Response> {
   const origin = request.headers.get("Origin");
 
@@ -93,13 +104,10 @@ export async function handleContact(request: Request, env: Env): Promise<Respons
     }
   }
 
-  const ticketRef = nanoid(10);
-  const toAddress = `${env.SUPPORT_LOCAL_PART}@${env.SUPPORT_DOMAIN}`;
-
-  const mime = buildContactEmail({
+  const contactMime = buildContactEmail({
     projectSlug: payload.projectSlug,
-    fromAddress: env.NOREPLY_FROM,
-    toAddress,
+    fromAddress: env.MAIL_FROM,
+    toAddress: env.TEAM_INBOX,
     senderName: payload.name,
     senderEmail: payload.fromEmail,
     subject: payload.subject,
@@ -107,16 +115,30 @@ export async function handleContact(request: Request, env: Env): Promise<Respons
     submittedAt: Date.now(),
   });
 
+  let result;
   try {
-    await env.SEND.send(new EmailMessage(env.NOREPLY_FROM, toAddress, mime.asRaw()));
+    const agent = await getAgentByName<Env, SupportAgent>(env.SupportAgent, payload.projectSlug);
+    result = await agent.processIncoming({
+      rawBase64: utf8ToBase64(contactMime.asRaw()),
+      fromAddress: payload.fromEmail,
+      toAddress: env.TEAM_INBOX,
+      projectSlug: payload.projectSlug,
+      senderNameOverride: payload.name,
+      senderAddressOverride: payload.fromEmail,
+    });
   } catch (err) {
-    console.error("contact send failed", err, { ticketRef, projectSlug: payload.projectSlug });
-    return jsonResponse(
-      { error: "failed to dispatch message" },
-      { status: 502 },
-      origin,
-    );
+    console.error("contact processing failed", err, { projectSlug: payload.projectSlug });
+    return jsonResponse({ error: "failed to process message" }, { status: 502 }, origin);
   }
 
-  return jsonResponse({ ok: true, ticketRef }, { status: 200 }, origin);
+  try {
+    await env.SEND.send(
+      new EmailMessage(result.summary.from, result.summary.to, result.summary.raw),
+    );
+  } catch (err) {
+    console.error("contact summary send failed", err, { projectSlug: payload.projectSlug });
+    return jsonResponse({ error: "failed to dispatch message" }, { status: 502 }, origin);
+  }
+
+  return jsonResponse({ ok: true, intent: result.intent }, { status: 200 }, origin);
 }

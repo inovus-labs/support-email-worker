@@ -9,6 +9,8 @@ interface ProcessInput {
   fromAddress: string;
   toAddress: string;
   projectSlug: string;
+  senderNameOverride?: string | null;
+  senderAddressOverride?: string;
 }
 
 interface SendableMime {
@@ -18,8 +20,6 @@ interface SendableMime {
 }
 
 export interface ProcessResult {
-  ticketId: number;
-  ticketRef: string;
   intent: Intent;
   reply: SendableMime;
   summary: SendableMime;
@@ -27,13 +27,11 @@ export interface ProcessResult {
 }
 
 interface AgentState {
-  totalTickets: number;
   lastError: string | null;
   lastErrorAt: number | null;
 }
 
 const INITIAL_STATE: AgentState = {
-  totalTickets: 0,
   lastError: null,
   lastErrorAt: null,
 };
@@ -48,21 +46,6 @@ function decodeBase64ToBytes(b64: string): Uint8Array {
 export class SupportAgent extends Agent<Env, AgentState> {
   override initialState: AgentState = INITIAL_STATE;
 
-  override async onStart(): Promise<void> {
-    this.sql`
-      CREATE TABLE IF NOT EXISTS tickets (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        sender      TEXT    NOT NULL,
-        subject     TEXT    NOT NULL,
-        intent      TEXT    NOT NULL,
-        confidence  REAL    NOT NULL,
-        summary     TEXT    NOT NULL,
-        received_at INTEGER NOT NULL,
-        message_id  TEXT
-      )
-    `;
-  }
-
   async processIncoming(input: ProcessInput): Promise<ProcessResult> {
     const bytes = decodeBase64ToBytes(input.rawBase64);
     const parsed = await PostalMime.parse(bytes);
@@ -70,26 +53,17 @@ export class SupportAgent extends Agent<Env, AgentState> {
     const subject = parsed.subject?.trim() || "(no subject)";
     const body = parsed.text?.trim() || stripHtml(parsed.html ?? "") || "";
     const messageId = parsed.messageId ?? null;
-    const senderName = parsed.from?.name?.trim() || null;
-    const senderAddress = parsed.from?.address || input.fromAddress;
+    const senderName =
+      input.senderNameOverride !== undefined
+        ? input.senderNameOverride
+        : parsed.from?.name?.trim() || null;
+    const senderAddress =
+      input.senderAddressOverride ?? parsed.from?.address ?? input.fromAddress;
     const receivedAt = Date.now();
 
     const classification = await classify(this.env, { subject, body });
 
-    const inserted = this.sql<{ id: number }>`
-      INSERT INTO tickets (sender, subject, intent, confidence, summary, received_at, message_id)
-      VALUES (${senderAddress}, ${subject}, ${classification.intent}, ${classification.confidence}, ${classification.summary}, ${receivedAt}, ${messageId})
-      RETURNING id
-    `;
-    const ticketId = inserted[0]?.id ?? 0;
-
-    this.setState({
-      ...this.state,
-      totalTickets: this.state.totalTickets + 1,
-    });
-
-    const { mime: replyMime, ticketRef } = buildAutoReply({
-      ticketId,
+    const replyMime = buildAutoReply({
       projectSlug: input.projectSlug,
       senderName,
       senderAddress,
@@ -99,21 +73,17 @@ export class SupportAgent extends Agent<Env, AgentState> {
     });
 
     const summaryMime = buildTeamSummary({
-      ticketId,
-      ticketRef,
       projectSlug: input.projectSlug,
       classification,
       sender: { name: senderName, address: senderAddress },
       subject,
       receivedAt,
       bodyPreview: body.slice(0, 4000),
-      fromAddress: this.env.NOREPLY_FROM,
-      toAddress: this.env.TEAM_BCC,
+      fromAddress: this.env.MAIL_FROM,
+      toAddress: this.env.TEAM_INBOX,
     });
 
     return {
-      ticketId,
-      ticketRef,
       intent: classification.intent,
       inReplyTo: messageId,
       reply: {
@@ -122,8 +92,8 @@ export class SupportAgent extends Agent<Env, AgentState> {
         raw: replyMime.asRaw(),
       },
       summary: {
-        from: this.env.NOREPLY_FROM,
-        to: this.env.TEAM_BCC,
+        from: this.env.MAIL_FROM,
+        to: this.env.TEAM_INBOX,
         raw: summaryMime.asRaw(),
       },
     };

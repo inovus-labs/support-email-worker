@@ -70,7 +70,7 @@ export default {
       message
         .reply(new EmailMessage(result.reply.from, result.reply.to, result.reply.raw))
         .catch(async (err) => {
-          console.error("auto-reply failed", err, { ticketRef: result.ticketRef });
+          console.error("auto-reply failed", err, { projectSlug });
           await recordError(env, projectSlug, `reply: ${stringifyError(err)}`);
         }),
     );
@@ -79,7 +79,7 @@ export default {
       env.SEND.send(
         new EmailMessage(result.summary.from, result.summary.to, result.summary.raw),
       ).catch(async (err) => {
-        console.error("team summary failed", err, { ticketRef: result.ticketRef });
+        console.error("team summary failed", err, { projectSlug });
         await recordError(env, projectSlug, `summary: ${stringifyError(err)}`);
       }),
     );

@@ -1,44 +1,90 @@
 # Inovus Email Worker
 
-A single Cloudflare Worker that powers `support@inovuslabs.org`:
+A single Cloudflare Worker that handles contact-form submissions and inbound email for Inovus Labs:
 
-- Exposes `POST /contact` for project contact forms.
-- Receives email at `support+<project>@inovuslabs.org` via Email Routing.
-- Uses Workers AI to classify intent.
-- Sends an auto-acknowledgment to the sender.
-- Sends a per-ticket summary to `inovuslabs@kjcmt.ac.in`.
-- Persists tickets per-project in Durable Object SQLite via the Agents SDK.
+- `POST /contact` — project sites post form submissions; each one is classified by Workers AI and a triage summary lands in the team inbox.
+- Inbound email — anything routed to the worker via Cloudflare Email Routing is parsed, classified, auto-replied to, and summarised for the team.
+
+No ticket store, no DB. Project slugs are used as Durable Object keys so per-project state (errors, future RAG indices) stays sticky.
 
 ## Architecture
 
+```mermaid
+flowchart TD
+    F["Project sites<br/>contact form"]
+    E["Inbound email<br/>(support+slug@inovuslabs.org)"]
+
+    F -- "POST /contact (JSON)" --> W
+    E -- "Email Routing<br/>catch-all → worker" --> W
+
+    W["Cloudflare Worker<br/>(fetch + email handlers)"]
+
+    W -- "synthesised MIME" --> A
+    W -- "raw inbound MIME" --> A
+
+    A["SupportAgent (Durable Object)<br/>keyed by project slug"]
+
+    A --> P["PostalMime<br/>parse"]
+    P --> C["Workers AI<br/>Llama 3.3 70B<br/>JSON-schema response"]
+    C --> B["Build MIMEs<br/>auto-reply + team summary<br/>(text + HTML)"]
+
+    B -. "inbound only" .-> R["message.reply()<br/>auto-reply to sender"]
+    B --> S["env.SEND.send()<br/>summary → TEAM_INBOX"]
 ```
-Project sites ─POST /contact─▶ Worker ─env.SEND.send─▶ support+<slug>@inovuslabs.org
-                                                                 │
-                                          Email Routing catch-all │
-                                                                 ▼
-Direct email ──────────────────────────────────────────▶ Worker email() handler
-                                                                 │
-                                                                 ▼
-                                            SupportAgent (Durable Object, keyed by slug)
-                                              ├─ PostalMime parse
-                                              ├─ Workers AI classify
-                                              ├─ this.sql INSERT ticket
-                                              └─ returns reply + summary MIME
-                                                                 │
-                                                                 ▼
-                                          Worker calls message.reply() + env.SEND.send()
+
+The contact-form path skips `message.reply()` because there is no inbound `EmailMessage` to reply to, and `env.SEND.send()` rejects unverified destinations — see [Limitations](#limitations).
+
+## Workers AI
+
+`src/classify.ts` calls `@cf/meta/llama-3.3-70b-instruct-fp8-fast` with a JSON-schema `response_format` so the output is constrained to:
+
+```json
+{
+  "intent": "support_question | collaboration | recruiting | media | spam | other",
+  "confidence": 0.0,
+  "summary": "single sentence, ≤160 chars"
+}
 ```
+
+Failure is non-fatal: a fallback classification (`other`, confidence 0, subject-as-summary) is returned and the email is still sent.
+
+## Cloudflare setup (one-time)
+
+1. Add `inovuslabs.org` to Cloudflare DNS.
+2. **Email → Email Routing → Enable** on `inovuslabs.org`. Cloudflare adds MX + SPF records and configures DKIM.
+3. **Destination addresses → Add** `inovuslabs@kjcmt.ac.in`, click the verification link Cloudflare emails. This unlocks `env.SEND.send()` for that address.
+4. **Routing rules → Catch-all → Send to Worker → `support-email-worker`**. This makes `support+<anything>@inovuslabs.org` invoke the worker's `email()` handler.
+5. Create a Turnstile site for your project form domains and store the secret:
+
+   ```sh
+   wrangler secret put TURNSTILE_SECRET
+   ```
+
+6. Deploy:
+
+   ```sh
+   npm run deploy
+   ```
+
+### Environment variables
+
+| Var | Purpose |
+| --- | --- |
+| `MAIL_FROM` | From address used on outbound mail (must be on a domain with Email Routing enabled). |
+| `TEAM_INBOX` | Destination for the AI-classified team summary. Must be a verified Email Routing destination. |
+| `TURNSTILE_ENABLED` | `"true"` to require a Turnstile token on `/contact`. |
+| `TURNSTILE_SECRET` | Secret (set via `wrangler secret put`). |
 
 ## Local development
 
 ```sh
 npm install
-npm run cf-typegen     # generate Worker types from wrangler.jsonc
+npm run cf-typegen
 npm run typecheck
-npm run dev            # wrangler dev
+npm run dev
 ```
 
-Test the contact endpoint:
+Contact endpoint:
 
 ```sh
 curl -X POST http://127.0.0.1:8787/contact \
@@ -48,15 +94,13 @@ curl -X POST http://127.0.0.1:8787/contact \
     "name": "Jane Doe",
     "fromEmail": "jane@example.com",
     "subject": "Question about Spectrum",
-    "message": "Hi, how do I run the demo locally?",
-    "turnstileToken": "XXXX.DUMMY.TOKEN.XXXX"
+    "message": "Hi, how do I run the demo locally?"
   }'
 ```
 
-For local testing of the Turnstile flow, use Cloudflare's documented test keys
-(set `TURNSTILE_SECRET` to `1x0000000000000000000000000000000AA` to always pass).
+For Turnstile in local dev, set `TURNSTILE_SECRET` to Cloudflare's always-pass test key `1x0000000000000000000000000000000AA`.
 
-Test the email handler:
+Inbound email simulation:
 
 ```sh
 wrangler email send \
@@ -66,21 +110,7 @@ wrangler email send \
   --body "Hello, this is a test."
 ```
 
-## Cloudflare dashboard setup (one-time)
-
-1. Add `inovuslabs.org` to Cloudflare DNS.
-2. **Email → Email Routing → Enable** on `inovuslabs.org`. Cloudflare will add the required MX + SPF records.
-3. **Destination addresses → Add** `inovuslabs@kjcmt.ac.in` and confirm via the verification email. (Required so `env.SEND.send()` is allowed to deliver to it.)
-4. **Routing rules → Catch-all → Send to Worker → `support-email-worker`**. This is what makes `support+anything@inovuslabs.org` reach the Worker.
-5. Create a Turnstile site for the project form domains; copy the **secret** key:
-   ```sh
-   wrangler secret put TURNSTILE_SECRET
-   ```
-6. Confirm DKIM is auto-configured by Email Routing for `inovuslabs.org`. The reply API rejects messages without valid DMARC.
-
 ## Contact form contract
-
-Each project site sends:
 
 ```http
 POST https://support-email-worker.<subdomain>.workers.dev/contact
@@ -92,35 +122,39 @@ Content-Type: application/json
   "fromEmail": "jane@example.com",
   "subject": "Question about Spectrum",
   "message": "...",
-  "turnstileToken": "<token from cf-turnstile widget>"
+  "turnstileToken": "<token from cf-turnstile widget, if TURNSTILE_ENABLED>"
 }
 ```
 
 Response:
 
 ```json
-{ "ok": true, "ticketRef": "abc123XYZ_" }
+{ "ok": true, "intent": "support_question" }
 ```
 
-Project slugs: lowercase letters, digits, hyphens; 1–32 characters.
+`projectSlug` is `^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$` — lowercase letters, digits, hyphens; 1–32 chars.
 
 ## File layout
 
 | File | Purpose |
 | --- | --- |
-| `src/index.ts` | `fetch` + `email` entry points; routes by project slug |
-| `src/agent.ts` | `SupportAgent` Durable Object: parse, classify, persist, render |
-| `src/contact.ts` | `POST /contact` handler with Turnstile + Zod validation |
-| `src/classify.ts` | Workers AI Llama 3.1 prompt → JSON intent |
-| `src/templates.ts` | Auto-reply, team summary, contact-form MIME builders |
+| `src/index.ts` | `fetch` + `email` entry points |
+| `src/contact.ts` | `POST /contact` handler (Zod validation, Turnstile, agent dispatch) |
+| `src/agent.ts` | `SupportAgent` Durable Object: parse → classify → build reply + summary |
+| `src/classify.ts` | Workers AI call with JSON-schema response format |
+| `src/templates.ts` | MIME builders (auto-reply, team summary, contact form) — multipart text + HTML |
 | `src/routing.ts` | `parseSubAddress` for `support+slug@domain` |
-| `src/types.ts` | `Env`, `Intent`, classification + ticket types |
-| `wrangler.jsonc` | Bindings: `AI`, `SEND`, `SupportAgent` (DO with SQLite) |
+| `src/types.ts` | `Env`, `Intent`, `Classification` |
+| `wrangler.jsonc` | Bindings: `AI`, `SEND`, `SupportAgent` (DO) |
 
-## Deferred (v1 scope)
+## Limitations
 
-- Autonomous FAQ replies (knowledge base lookup before reply step).
-- Per-project RAG.
-- Web dashboard for browsing tickets.
-- Slack / Discord notifications.
+- **No auto-reply to contact-form submitters.** `env.SEND.send()` only delivers to addresses verified in Email Routing, so we cannot reply to arbitrary form submitters from the `/contact` path. Inbound email replies (via `message.reply()`) are unaffected. To enable contact-form auto-replies, plug in a transactional email service (Resend, MailChannels, Postmark, etc.) called from `handleContact`.
+- **No persistence.** Tickets, threads, and history are not stored. Each request is independent.
+
+## Deferred
+
+- Transactional sender for contact-form auto-replies.
+- Per-project RAG / FAQ lookup before the reply step.
+- Slack / Discord notifications on certain intents.
 - Rate limiting beyond Turnstile.

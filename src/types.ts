@@ -24,15 +24,6 @@ export interface Classification {
   summary: string;
 }
 
-export interface TicketRow {
-  id: number;
-  sender: string;
-  subject: string;
-  intent: Intent;
-  received_at: number;
-  message_id: string | null;
-}
-
 export type ContactPayload = z.infer<typeof contactPayloadSchema>;
 
 export interface Env {
@@ -41,8 +32,6 @@ export interface Env {
   SupportAgent: DurableObjectNamespace;
   TURNSTILE_SECRET: string;
   TURNSTILE_ENABLED: string;
-  SUPPORT_DOMAIN: string;
-  SUPPORT_LOCAL_PART: string;
-  NOREPLY_FROM: string;
-  TEAM_BCC: string;
+  MAIL_FROM: string;
+  TEAM_INBOX: string;
 }
