@@ -21,7 +21,7 @@ export function buildAutoReply(args: AutoReplyArgs) {
     )
     .join("");
 
-  const autoNote = "This is an automated reply. A teammate may follow up personally.";
+  const autoNote = "This is an automated reply.";
   const footerNote = `Automated reply · Inovus Labs\n${autoNote}`;
 
   const textBody = [
