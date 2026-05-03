@@ -1,11 +1,28 @@
 import { EmailMessage } from "cloudflare:email";
 import { getAgentByName } from "agents";
+import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { handleContact } from "./contact";
 import { projectSlugFor } from "./routing";
 import type { Env } from "./types";
 import type { ProcessResult, SupportAgent } from "./agent";
 
 export { SupportAgent } from "./agent";
+
+const app = new Hono<{ Bindings: Env }>();
+
+app.use(
+  "/contact",
+  cors({
+    origin: (origin) => origin ?? "*",
+    allowMethods: ["POST", "OPTIONS"],
+    allowHeaders: ["Content-Type"],
+    maxAge: 86400,
+  }),
+);
+
+app.get("/health", (c) => c.text("ok"));
+app.post("/contact", (c) => handleContact(c));
 
 async function readAllToBase64(stream: ReadableStream<Uint8Array>): Promise<string> {
   const reader = stream.getReader();
@@ -34,16 +51,7 @@ async function readAllToBase64(stream: ReadableStream<Uint8Array>): Promise<stri
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    if (url.pathname === "/contact") {
-      return handleContact(request, env);
-    }
-    if (url.pathname === "/health") {
-      return new Response("ok", { status: 200 });
-    }
-    return new Response("not found", { status: 404 });
-  },
+  fetch: app.fetch,
 
   async email(message: ForwardableEmailMessage, env: Env, ctx: ExecutionContext): Promise<void> {
     const projectSlug = projectSlugFor(message.to, "general");

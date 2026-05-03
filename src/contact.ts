@@ -1,5 +1,6 @@
 import { EmailMessage } from "cloudflare:email";
 import { getAgentByName } from "agents";
+import type { Context } from "hono";
 import { z } from "zod";
 import { buildContactEmail } from "./templates";
 import type { Env } from "./types";
@@ -35,27 +36,6 @@ async function verifyTurnstile(env: Env, token: string, remoteIp: string | null)
   }
 }
 
-function corsHeaders(origin: string | null): Record<string, string> {
-  return {
-    "Access-Control-Allow-Origin": origin ?? "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Max-Age": "86400",
-    Vary: "Origin",
-  };
-}
-
-function jsonResponse(body: unknown, init: ResponseInit, origin: string | null): Response {
-  return new Response(JSON.stringify(body), {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...corsHeaders(origin),
-      ...(init.headers ?? {}),
-    },
-  });
-}
-
 function utf8ToBase64(input: string): string {
   const bytes = new TextEncoder().encode(input);
   let binary = "";
@@ -66,41 +46,30 @@ function utf8ToBase64(input: string): string {
   return btoa(binary);
 }
 
-export async function handleContact(request: Request, env: Env): Promise<Response> {
-  const origin = request.headers.get("Origin");
-
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders(origin) });
-  }
-  if (request.method !== "POST") {
-    return jsonResponse({ error: "method not allowed" }, { status: 405 }, origin);
-  }
+export async function handleContact(c: Context<{ Bindings: Env }>) {
+  const env = c.env;
 
   let raw: unknown;
   try {
-    raw = await request.json();
+    raw = await c.req.json();
   } catch {
-    return jsonResponse({ error: "invalid JSON" }, { status: 400 }, origin);
+    return c.json({ error: "invalid JSON" }, 400);
   }
 
   const parsed = contactPayloadSchema.safeParse(raw);
   if (!parsed.success) {
-    return jsonResponse(
-      { error: "invalid payload", issues: parsed.error.flatten() },
-      { status: 400 },
-      origin,
-    );
+    return c.json({ error: "invalid payload", issues: parsed.error.flatten() }, 400);
   }
   const payload = parsed.data;
 
   if (env.TURNSTILE_ENABLED === "true") {
     if (!payload.turnstileToken) {
-      return jsonResponse({ error: "turnstile token required" }, { status: 400 }, origin);
+      return c.json({ error: "turnstile token required" }, 400);
     }
-    const remoteIp = request.headers.get("CF-Connecting-IP");
+    const remoteIp = c.req.header("CF-Connecting-IP") ?? null;
     const turnstileOk = await verifyTurnstile(env, payload.turnstileToken, remoteIp);
     if (!turnstileOk) {
-      return jsonResponse({ error: "turnstile verification failed" }, { status: 403 }, origin);
+      return c.json({ error: "turnstile verification failed" }, 403);
     }
   }
 
@@ -128,7 +97,7 @@ export async function handleContact(request: Request, env: Env): Promise<Respons
     });
   } catch (err) {
     console.error("contact processing failed", err, { projectSlug: payload.projectSlug });
-    return jsonResponse({ error: "failed to process message" }, { status: 502 }, origin);
+    return c.json({ error: "failed to process message" }, 502);
   }
 
   try {
@@ -137,8 +106,8 @@ export async function handleContact(request: Request, env: Env): Promise<Respons
     );
   } catch (err) {
     console.error("contact summary send failed", err, { projectSlug: payload.projectSlug });
-    return jsonResponse({ error: "failed to dispatch message" }, { status: 502 }, origin);
+    return c.json({ error: "failed to dispatch message" }, 502);
   }
 
-  return jsonResponse({ ok: true, intent: result.intent }, { status: 200 }, origin);
+  return c.json({ ok: true, intent: result.intent });
 }
