@@ -2,7 +2,7 @@
 
 A Cloudflare Worker that handles contact-form submissions and inbound email for Inovus Labs.
 
-For every incoming message — whether it arrives via `POST /contact` or as a real email — Workers AI **drafts a contextual reply** specific to the message. On the inbound-email path that draft is sent back to the sender automatically; on the contact-form path the draft is included in the team triage email so a human can send it.
+For every incoming message — whether it arrives via `POST /contact` or as a real email — Workers AI **drafts a contextual reply** specific to the message. That draft is **sent to the sender** as the auto-reply body, and the same draft is **included in the team triage** email so a human can review or follow up.
 
 No DB, no tickets, no Durable Objects. Stateless.
 
@@ -20,15 +20,15 @@ flowchart TD
     BUILD["Build MIME parts"]:::cf
 
     %% ── Outputs ─────────────────────────────────
-    REPLY["✓ Auto-reply<br/>message.reply()"]:::reply
-    TRIAGE["→ Triage Email<br/>env.SEND.send()"]:::triage
+    REPLY["✓ Auto-reply<br/>to sender"]:::reply
+    TRIAGE["→ Triage email<br/>verified team inbox"]:::triage
 
     %% ── Flow ────────────────────────────────────
     F -->|JSON| W
     E -->|Email Routing| W
     W --> AI
     AI --> BUILD
-    BUILD -.->|inbound only| REPLY
+    BUILD --> REPLY
     BUILD --> TRIAGE
 
     classDef form   fill:#FEF3C7,stroke:#F59E0B,color:#78350F;
@@ -38,7 +38,7 @@ flowchart TD
     classDef triage fill:#E0E7FF,stroke:#6366F1,color:#312E81;
 ```
 
-The contact-form path skips `message.reply()` because there's no inbound `EmailMessage` to reply to, and `env.SEND.send()` rejects unverified destinations — see [Limitations](#limitations).
+Triage is delivered to **`TEAM_INBOX`** (a verified Email Routing destination you configure). The auto-reply goes to the sender via **`env.SEND.send(reply)`** on `/contact`, or **`message.reply()`** for inbound email. See [Limitations](#limitations).
 
 ## Workers AI
 
@@ -54,7 +54,7 @@ The system prompt forbids inventing facts/links/timelines and tells the model no
 
 1. Add `inovuslabs.org` to Cloudflare DNS.
 2. **Email → Email Routing → Enable** on `inovuslabs.org` (Cloudflare adds MX + SPF + DKIM).
-3. **Destination addresses → Add** `inovuslabs@kjcmt.ac.in` and click the verification link. This is what unlocks `env.SEND.send()`.
+3. **Destination addresses → Add** the address you will use as `TEAM_INBOX` and complete verification. That unlocks `env.SEND.send()` to your team.
 4. **Routing rules → `info@inovuslabs.org` → Send to Worker → `support-email-worker`**.
 5. Turnstile secret:
 
@@ -131,7 +131,7 @@ Content-Type: application/json
 Response:
 
 ```json
-{ "ok": true, "intent": "support_question" }
+{ "ok": true }
 ```
 
 `projectSlug` is `^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$`.
@@ -155,10 +155,9 @@ wrangler.jsonc         bindings: AI, SEND
 
 ## Limitations
 
-- **No auto-reply to contact-form submitters.** `env.SEND.send()` only delivers to verified destinations, so contact-form submitters can't be auto-replied to without a third-party transactional sender (Resend, MailChannels, Postmark). Inbound email replies via `message.reply()` are unaffected.
+- **`TEAM_INBOX`** must be a **verified** Email Routing destination. **`MAIL_FROM`** must be on a domain with Email Routing enabled. Cloudflare may restrict who you can send to; see current [Email Routing Workers docs](https://developers.cloudflare.com/email-routing/email-routing-workers/).
 
 ## Deferred
 
-- Transactional sender for contact-form auto-replies.
 - Per-project FAQ / RAG before reply.
 - Slack / Discord notifications on certain intents.

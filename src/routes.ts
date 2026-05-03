@@ -54,7 +54,7 @@ app.post("/contact", async (c) => {
   }
 
   try {
-    const { intent, triage } = await processMail(env, {
+    const { reply, triage } = await processMail(env, {
       projectSlug: p.projectSlug,
       senderName: p.name,
       senderAddress: p.fromEmail,
@@ -65,8 +65,8 @@ app.post("/contact", async (c) => {
       mailFrom: env.MAIL_FROM,
       teamInbox: env.TEAM_INBOX,
     });
-    await env.SEND.send(triage);
-    return c.json({ ok: true, intent });
+    await Promise.all([env.SEND.send(reply), env.SEND.send(triage)]);
+    return c.json({ ok: true });
   } catch (err) {
     console.error("contact failed", err, { slug: p.projectSlug });
     return c.json({ error: "failed to dispatch" }, 502);
