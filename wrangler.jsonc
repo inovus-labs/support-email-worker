@@ -19,25 +19,12 @@
   "send_email": [
     {
       "name": "SEND",
-      "allowed_destination_addresses": [
-        "inovuslabs@kjcmt.ac.in",
-        "support@inovuslabs.org"
-      ]
+      "allowed_destination_addresses": ["inovuslabs@kjcmt.ac.in"]
     }
   ],
-  "durable_objects": {
-    "bindings": [
-      {
-        "name": "SupportAgent",
-        "class_name": "SupportAgent"
-      }
-    ]
-  },
   "migrations": [
-    {
-      "tag": "v1",
-      "new_sqlite_classes": ["SupportAgent"]
-    }
+    { "tag": "v1", "new_sqlite_classes": ["SupportAgent"] },
+    { "tag": "v2", "deleted_classes": ["SupportAgent"] }
   ],
   "vars": {
     "MAIL_FROM": "info@inovuslabs.org",
