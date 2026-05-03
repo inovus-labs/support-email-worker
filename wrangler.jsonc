@@ -27,6 +27,7 @@
     { "tag": "v2", "deleted_classes": ["SupportAgent"] }
   ],
   "vars": {
+    "AI_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
     "MAIL_FROM": "info@inovuslabs.org",
     "TEAM_INBOX": "inovuslabs@kjcmt.ac.in",
     "TURNSTILE_ENABLED": "false"

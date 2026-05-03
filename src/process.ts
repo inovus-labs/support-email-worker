@@ -3,9 +3,7 @@ import { buildAutoReply } from "./templates/auto-reply";
 import { buildTriageEmail } from "./templates/triage";
 import type { Env } from "./types";
 
-const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
-
-const SYSTEM = `You are drafting a brief, courteous reply on behalf of Inovus Labs Support. Inovus Labs is a student-led open-source / research community at KJCMT.
+const SYSTEM = `You are drafting a brief, courteous reply on behalf of Inovus Labs Support. Inovus Labs is a student community at Kristu Jyoti College. Your reply should follow these guidelines:
 
 Rules:
 - 3 to 5 short sentences, plain text, no markdown.
@@ -34,7 +32,7 @@ async function draftReply(
   input: { senderName: string | null; subject: string; body: string },
 ): Promise<string> {
   try {
-    const result = await (env.AI as any).run(MODEL, {
+    const result = await (env.AI as any).run(env.AI_MODEL, {
       messages: [
         { role: "system", content: SYSTEM },
         {

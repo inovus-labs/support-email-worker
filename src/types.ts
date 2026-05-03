@@ -5,4 +5,5 @@ export interface Env {
   TURNSTILE_ENABLED: string;
   MAIL_FROM: string;
   TEAM_INBOX: string;
+  AI_MODEL: string;
 }
