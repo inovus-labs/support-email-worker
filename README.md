@@ -10,20 +10,32 @@ No DB, no tickets, no Durable Objects. Stateless.
 
 ```mermaid
 flowchart TD
-    F["Project sites<br/>contact form"]
-    E["Inbound email<br/>info@inovuslabs.org"]
+    %% ── Inputs ──────────────────────────────────
+    F["Project Sites<br/>POST /contact"]:::form
+    E["Inbound Email<br/>info@inovuslabs.org"]:::email
 
-    F -- "POST /contact (JSON)" --> W
-    E -- "Email Routing → worker" --> W
+    %% ── Processing pipeline ─────────────────────
+    W["Cloudflare Worker"]:::cf
+    AI["Workers AI<br/>Llama 3.3 70B"]:::cf
+    BUILD["Build MIME parts"]:::cf
 
-    W["Cloudflare Worker"]
-    W --> Pr["process(env, input)"]
+    %% ── Outputs ─────────────────────────────────
+    REPLY["✓ Auto-reply<br/>message.reply()"]:::reply
+    TRIAGE["→ Triage Email<br/>env.SEND.send()"]:::triage
 
-    Pr --> C["Workers AI<br/>Llama 3.3 70B<br/>drafts reply body<br/>(json_schema)"]
-    C --> B["Build MIMEs<br/>auto-reply + triage<br/>(text + HTML)"]
+    %% ── Flow ────────────────────────────────────
+    F -->|JSON| W
+    E -->|Email Routing| W
+    W --> AI
+    AI --> BUILD
+    BUILD -.->|inbound only| REPLY
+    BUILD --> TRIAGE
 
-    B -. "inbound only" .-> R["message.reply()<br/>send drafted reply"]
-    B --> S["env.SEND.send()<br/>triage → TEAM_INBOX<br/>(includes drafted reply)"]
+    classDef form   fill:#FEF3C7,stroke:#F59E0B,color:#78350F;
+    classDef email  fill:#FEF3C7,stroke:#F59E0B,color:#78350F;
+    classDef cf     fill:#FFE4CC,stroke:#F38020,color:#7C2D12;
+    classDef reply  fill:#DCFCE7,stroke:#22C55E,color:#15803D;
+    classDef triage fill:#E0E7FF,stroke:#6366F1,color:#312E81;
 ```
 
 The contact-form path skips `message.reply()` because there's no inbound `EmailMessage` to reply to, and `env.SEND.send()` rejects unverified destinations — see [Limitations](#limitations).
