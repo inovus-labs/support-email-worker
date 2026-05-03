@@ -49,7 +49,8 @@ async function draftReply(
       temperature: 0.4,
       response_format: RESPONSE_FORMAT,
     });
-    const data = JSON.parse(result.response);
+    const r = result.response;
+    const data = typeof r === "string" ? JSON.parse(r) : r;
     if (typeof data.reply === "string" && data.reply.trim()) return data.reply.trim();
     return FALLBACK_REPLY;
   } catch (err) {
