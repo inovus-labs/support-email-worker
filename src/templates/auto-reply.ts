@@ -14,6 +14,15 @@ export function buildAutoReply(args: AutoReplyArgs) {
   const firstName = args.senderName ? args.senderName.split(/\s+/)[0]! : "";
   const greeting = firstName ? `Hi ${firstName},` : "Hi,";
   const paragraphs = args.body.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const bodyHtml = paragraphs
+    .map(
+      (p, i) =>
+        `<p style="margin:0 0 ${i < paragraphs.length - 1 ? "16" : "0"}px 0;font-size:16px;line-height:1.7;color:#475569;">${escapeHtml(p)}</p>`,
+    )
+    .join("");
+
+  const autoNote = "This is an automated reply. A teammate may follow up personally.";
+  const footerNote = `Automated reply · Inovus Labs\n${autoNote}`;
 
   const textBody = [
     greeting,
@@ -22,27 +31,35 @@ export function buildAutoReply(args: AutoReplyArgs) {
     "",
     `— ${BRAND_NAME} Support`,
     BRAND_URL,
+    "",
+    "---",
+    "",
+    footerNote,
   ].join("\n");
 
   const htmlBody = htmlShell(
     paragraphs[0]?.slice(0, 120) ?? "Thanks for reaching out.",
+    "Support",
+    600,
     `
         <tr>
-          <td style="padding:32px 28px 8px 28px;">
-            <h1 style="margin:0 0 16px 0;font-size:20px;line-height:1.3;font-weight:600;color:#111827;">${escapeHtml(greeting)}</h1>
-            ${paragraphs
-              .map(
-                (p) =>
-                  `<p style="margin:0 0 14px 0;font-size:15px;line-height:1.65;color:#374151;">${escapeHtml(p)}</p>`,
-              )
-              .join("\n            ")}
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:8px 28px 28px 28px;">
-            <p style="margin:18px 0 0 0;font-size:14px;line-height:1.6;color:#111827;">— ${escapeHtml(BRAND_NAME)} Support</p>
+          <td style="padding:16px 32px 28px 32px;">
+            <p style="margin:0 0 20px 0;font-size:22px;font-weight:700;color:#0f172a;">${escapeHtml(greeting)}</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;">
+              <tr><td style="padding:24px 22px;">${bodyHtml}</td></tr>
+            </table>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;">
+              <tr>
+                <td width="4" style="width:4px;background:#4f46e5;border-radius:2px;">&nbsp;</td>
+                <td style="padding-left:16px;">
+                  <p style="margin:0;font-size:15px;font-weight:600;color:#0f172a;">${escapeHtml(BRAND_NAME)} Support</p>
+                  <p style="margin:4px 0 0 0;font-size:13px;color:#64748b;">Here if you need anything else.</p>
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>`,
+    footerNote,
   );
 
   const subject = args.originalSubject.toLowerCase().startsWith("re:")

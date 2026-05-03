@@ -11,7 +11,21 @@ export function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-export function htmlShell(preheader: string, contentHtml: string): string {
+/** Wrapper table: pass inner &lt;tr&gt;… rows only. Optional footer note (plain text, multiple lines ok) shown above the site link. */
+export function htmlShell(
+  preheader: string,
+  subtitle: string,
+  width: number,
+  contentHtml: string,
+  footerNote?: string,
+): string {
+  const footerNoteHtml = footerNote
+    ? `<p style="margin:0 0 14px 0;font-size:11px;line-height:1.55;color:#94a3b8;">${footerNote
+        .split("\n")
+        .map((line) => escapeHtml(line))
+        .join("<br>")}</p>`
+    : "";
+
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -19,27 +33,34 @@ export function htmlShell(preheader: string, contentHtml: string): string {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(BRAND_NAME)}</title>
 </head>
-<body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111827;">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;visibility:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#f4f5f7;">${escapeHtml(preheader)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f5f7;">
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Segoe UI',Roboto,-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;color:#0f172a;">
+<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;color:#f8fafc;">${escapeHtml(preheader)}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc;">
   <tr>
-    <td align="center" style="padding:32px 16px;">
-      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+    <td align="center" style="padding:40px 20px;">
+      <table role="presentation" width="${width}" cellpadding="0" cellspacing="0" border="0" style="max-width:${width}px;width:100%;background:#fff;border-radius:16px;border:1px solid #e2e8f0;">
+        <tr><td style="height:4px;background:#4f46e5;font-size:0;line-height:0;">&nbsp;</td></tr>
         <tr>
-          <td style="padding:20px 28px;background:#0f172a;color:#f8fafc;">
+          <td style="padding:28px 32px;background:#eef2ff;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
               <tr>
-                <td style="font-size:14px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#f8fafc;">${escapeHtml(BRAND_NAME)}</td>
-                <td align="right" style="font-size:12px;color:#94a3b8;">${escapeHtml(BRAND_EMAIL)}</td>
+                <td>
+                  <div style="font-size:20px;font-weight:700;color:#0f172a;">${escapeHtml(BRAND_NAME)}</div>
+                  <div style="margin-top:6px;font-size:13px;color:#64748b;">${escapeHtml(subtitle)}</div>
+                </td>
+                <td align="right">
+                  <a href="mailto:${escapeHtml(BRAND_EMAIL)}" style="padding:8px 14px;font-size:12px;font-weight:600;color:#4f46e5;text-decoration:none;border:1px solid #c7d2fe;border-radius:999px;background:#fff;">${escapeHtml(BRAND_EMAIL)}</a>
+                </td>
               </tr>
             </table>
           </td>
         </tr>
         ${contentHtml}
         <tr>
-          <td style="padding:18px 28px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280;">
-            <a href="${BRAND_URL}" style="color:#2563eb;text-decoration:none;">inovuslabs.org</a>
-            &nbsp;·&nbsp; A student-led tech community
+          <td style="padding:24px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b;">
+            ${footerNoteHtml}
+            <a href="${BRAND_URL}" style="color:#4f46e5;font-weight:600;text-decoration:none;">inovuslabs.org</a>
+            &nbsp;&nbsp;·&nbsp;&nbsp; Student-led tech community
           </td>
         </tr>
       </table>

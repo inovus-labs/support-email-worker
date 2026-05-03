@@ -3,7 +3,7 @@ import { buildAutoReply } from "./templates/auto-reply";
 import { buildTriageEmail } from "./templates/triage";
 import type { Env } from "./types";
 
-const SYSTEM = `You are drafting a brief, courteous reply on behalf of Inovus Labs Support. Inovus Labs is a student community at Kristu Jyoti College. Your reply should follow these guidelines:
+const SYSTEM = `You are drafting a brief, courteous reply on behalf of Inovus Labs Support. Inovus Labs is a student-led tech community. Your reply should follow these guidelines:
 
 Rules:
 - 3 to 5 short sentences, plain text, no markdown.
